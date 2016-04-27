@@ -12,6 +12,7 @@ class NDDataArray(object):
     This class represents an ND Data Array. The data stored as numpy array attribute.
     The data axis are separate classes and this class has them as members. The axis 
     order follows numpy convention for arrays, i.e. the axis added last is at index 0.
+    For an example see NDData_demo.ipynb.
     """
     def __init__(self):
         self._axes = list()
