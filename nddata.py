@@ -9,10 +9,10 @@ import IPython
 class NDDataArray(object):
     """ND Data Array
 
-    This class represents an ND Data Array. The data stored as numpy array attribute.
-    The data axis are separate classes and this class has them as members. The axis 
-    order follows numpy convention for arrays, i.e. the axis added last is at index 0.
-    For an example see NDData_demo.ipynb.
+    This class represents an ND Data Array. The data stored as numpy array
+    attribute. The data axis are separate classes and this class has them as
+    members. The axis order follows numpy convention for arrays, i.e. the axis
+    added last is at index 0. For an example see NDData_demo.ipynb.
     """
     def __init__(self):
         self._axes = list()
@@ -28,11 +28,11 @@ class NDDataArray(object):
         axis : `DataAxis`
             axis
         """
-        default_names = {0 : 'x', 1 : 'y', 2: 'z'}
+        default_names = {0: 'x', 1: 'y', 2: 'z'}
         if axis.name is None:
             axis.name = default_names[self.dim]
         self._axes = [axis] + self._axes
-        
+
         # Quick solution: delete data to prevent unwanted behaviour
         self._data = None
 
@@ -60,17 +60,18 @@ class NDDataArray(object):
         data = np.array(data)
         d = len(data.shape)
         if d != self.dim:
-            raise ValueError('Overall dimensions to not match. Data: {}, Hist: {}'.format(d, self.dim))
+            raise ValueError('Overall dimensions to not match. '
+                             'Data: {}, Hist: {}'.format(d, self.dim))
 
         for dim in np.arange(self.dim):
             if self.axes[dim].nbins != data.shape[dim]:
                 a = self.axes[dim]
                 raise ValueError('Data shape does not match in dimension {d}\n'
                                  'Axis "{n}": {sa}, Data {sd}'.format(
-                                     d = dim, n = a.name, sa = a.nbins, sd = data.shape[dim]))
+                                 d=dim, n=a.name, sa=a.nbins,
+                                 sd=data.shape[dim]))
 
         self._data = data
-
 
     @property
     def axis_names(self):
@@ -155,7 +156,7 @@ class NDDataArray(object):
         idx = self.find_node(**kwargs)
         data = self.data
         for i in np.arange(self.dim):
-            data = np.take(data, idx[i], axis = i)
+            data = np.take(data, idx[i], axis=i)
 
         return data
         
@@ -171,14 +172,19 @@ class NDDataArray(object):
         if len(data.squeeze().shape) != 2:
             raise ValueError('Data has shape {} after slicing. '
                              'Need 2d data for image plot'.format(data.shape))
-    
-        
+
         ax.set_xlabel('{} [{}]'.format(self.axes[0].name, self.axes[0].unit))
         ax.set_ylabel('{} [{}]'.format(self.axes[1].name, self.axes[1].unit))
         ax.imshow(data.transpose(), origin='lower', **plot_kwargs)
 
     def plot_profile(self, axis, ax=None, **kwargs):
-        """Show data as function of one axis"""
+        """Show data as function of one axis
+
+        Parameters
+        ----------
+        axis : DataAxis
+            data axis to use
+        """
 
         raise NotImplementedError
 
@@ -189,11 +195,8 @@ class NDDataArray(object):
         kwargs.setdefault(axis, self.axes[ax_ind])
 
         x = kwargs.pop(axis)
-        
 
         y = self.evaluate(**kwargs)
-
-        
 
 
 class DataAxis(Quantity):
@@ -264,4 +267,3 @@ class BinnedDataAxis(DataAxis):
     def lin_center(self):
         """Linear bin centers"""
         return DataAxis(self[:-1] + self[1:]) / 2
-
