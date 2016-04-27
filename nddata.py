@@ -9,14 +9,24 @@ import IPython
 class NDDataArray(object):
     """ND Data Array
 
-    Follows numpy convention for arrays
+    This class represents an ND Data Array. The data stored as numpy array attribute.
+    The data axis are separate classes and this class has them as members. The axis 
+    order follows numpy convention for arrays, i.e. the axis added last is at index 0.
     """
-
     def __init__(self):
         self._axes = list()
         self._data = None
 
     def add_axis(self, axis):
+        """Add axis
+
+        This data array is set to None to avoid unwanted behaviour.
+
+        Parameters
+        ----------
+        axis : `DataAxis`
+            axis
+        """
         default_names = {0 : 'x', 1 : 'y', 2: 'z'}
         if axis.name is None:
             axis.name = default_names[self.dim]
@@ -27,14 +37,25 @@ class NDDataArray(object):
 
     @property
     def axes(self):
+        """Array holding all axes"""
         return self._axes
 
     @property
     def data(self):
+        """Array holding the ND data"""
         return self._data
 
     @data.setter
     def data(self, data):
+        """Set data
+
+        Some sanitiy checks are performed to avoid an invalid array
+
+        Parameters
+        ----------
+        data : np.array
+            Data array
+        """
         data = np.array(data)
         d = len(data.shape)
         if d != self.dim:
@@ -56,30 +77,46 @@ class NDDataArray(object):
         return [a.name for a in self.axes]
     
     def get_axis_index(self, name):
-        """Return axis index by it name"""
+        """Return axis index by it name
+
+        Parameters
+        ----------
+        name : str
+            Valid axis name
+        """
         for a in self.axes:
             if a.name == name:
                 return self.axes.index(a)
         raise ValueError("No axis with name {}".format(name))
 
-
     def get_axis(self, name):
-        """Return axis by it name"""
+        """Return axis by it name
+
+        Parameters
+        ----------
+        name : str
+            Valid axis name
+        """
         idx = self.get_axis_index(name)
         return self.axes[idx]
 
     @property
     def dim(self):
+        """Dimension (number of axes)"""
         return len(self.axes)
 
     def to_table(self):
         """Convert to astropy.Table"""
+        # This can be used as starting point for FITS serialization
+        # http://docs.astropy.org/en/stable/io/unified.html
+        
         cols = [Column(data=[a.value], unit=a.unit) for a in self.axes]
         cols.append(Column(data=[self.data], name='data'))
         t = Table(cols)
         return t
 
     def __str__(self):
+        """String representation"""
         return str(self.to_table())
 
     def find_node(self, **kwargs):
@@ -108,6 +145,11 @@ class NDDataArray(object):
         """Evaluate NDData Array
 
         No interpolation
+
+        Parameters
+        ----------
+        kwargs : dict
+            Axis names are keys, Quantity array are values
         """
         idx = self.find_node(**kwargs)
         data = self.data
@@ -165,7 +207,13 @@ class DataAxis(Quantity):
         super(DataAxis, self).__array_finalize__(obj)
 
     def find_node(self, val):
-        """Find next node"""
+        """Find next node
+
+        Parameters
+        ----------
+        val : `~astropy.units.Quantity`
+            Lookup value
+        """
         val = Quantity(val)
 
         if not val.unit.is_equivalent(self.unit):
@@ -182,16 +230,19 @@ class DataAxis(Quantity):
 
     @property
     def nbins(self):
+        """Number of bins"""
         return self.size
 
     @property
     def nodes(self):
+        """Evaluation nodes"""
         return self
 
 
 class BinnedDataAxis(DataAxis):
     @classmethod
     def linspace(cls, min, max, nbins, unit=None):
+        """Create linearly spaced axis"""
         if unit is None:
             raise NotImplementedError
 
@@ -201,10 +252,12 @@ class BinnedDataAxis(DataAxis):
 
     @property
     def nbins(self):
+        """Number of bins"""
         return self.size - 1
 
     @property
     def nodes(self):
+        """Evaluation nodes"""
         return self.lin_center()
 
     def lin_center(self):
