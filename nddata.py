@@ -38,6 +38,7 @@ class NDDataArray(object):
 
         # Quick solution: delete data to prevent unwanted behaviour
         self._data = None
+        self._lininterp = None
 
     @property
     def axes(self):
@@ -202,18 +203,23 @@ class NDDataArray(object):
 
         return data
 
-    def evaluate(self, interp='linear', **kwargs):
-        """Evaluate NDData Array using a given interpolator.
+    def evaluate(self, method='linear', **kwargs):
+        """Evaluate NDData Array
+
+         This function provides a uniform interface to several interpolators
 
         Interpolators have to be added before this function can be used.
         TODO : Do we want a default interpolator to be added on construction?
 
+        Currently available:
+        `~scipy.interpolate.RegularGridInterpolator`, methods: linear, nearest
+
         Parameters
         ----------
-        interp : str {'linear'}
-            Interpolator to be used
+        method : str {'linear', 'nearest'}
+            Interpolation method
         kwargs : dict
-            Axis names are keys, Quantity array are values
+            Keys are the axis names, Values the evaluation points
 
         Returns
         -------
@@ -230,21 +236,24 @@ class NDDataArray(object):
 
         # Put in correct units
         for key in kwargs:
-            val = kwargs[key].to(self.get_axis(key).unit).value
-            kwargs[key] = np.atleast_1d(val)
+            val = Quantity(kwargs[key], unit=self.get_axis(key).unit)
+            kwargs[key] = np.atleast_1d(val).value
 
         # Bring in correct order
         values = [kwargs[_] for _ in self.axis_names]
 
-        # Apply log10 where necessary (this is probably not very efficient)
+        # Apply log10 where necessary
+        # Todo : only calc log10 when needed
         log_values = [np.log10(_) for _ in values]
         loginterp = [a.log_interpolation for a in self.axes]
         values = np.where(loginterp, log_values, values)
 
-        if interp == 'linear':
-            return self._eval_linear(values) * self.data.unit
+        if method == 'linear':
+            return self._eval_linear(values, method='linear') * self.data.unit
+        elif method == 'nearest':
+            return self._eval_linear(values, method='nearest') * self.data.unit
         else:
-            raise ValueError('Interpolator {} not available'.format(interp))
+            raise ValueError('Interpolator {} not available'.format(method))
 
     def add_linear_interpolator(self, **kwargs):
         """Add `~scipy.interpolate.RegularGridInterpolator`
@@ -265,14 +274,18 @@ class NDDataArray(object):
 
         self._lininterp = RegularGridInterpolator(points, values, **kwargs)
 
-    def _eval_linear(self, values):
+    def _eval_linear(self, values, method='linear'):
         """Evaluate linear interpolator
 
         Input: list of values to evaluate, in correct units and correct order.
         """
+        if self._lininterp is None:
+            raise ValueError('Linear interpolation requested but no linear '
+                             'interpolator initialized')
+
         shapes = [np.shape(_)[0] for _ in values]
         points = list(itertools.product(*values))
-        res = self._lininterp(points)
+        res = self._lininterp(points, method=method)
         res = np.reshape(res, shapes)
 
         return res

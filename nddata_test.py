@@ -5,6 +5,7 @@ import random
 import numpy as np
 import IPython
 
+# ---------------------
 # Example: 1D Histogram
 # ---------------------
 
@@ -55,6 +56,17 @@ assert eval_data == data[3]
 eval_data = hist.evaluate_nearest(x=[32.52 * u('m'), 12 * u('m'), 61.1512 * u('m')])
 assert (eval_data == np.asarray(data)[np.array([3, 1, 6])]).all()
 
+
+# Interpolation
+hist.add_linear_interpolator()
+
+interp_data = hist.evaluate(x=[32.52 * u('m'), 12 * u('m'), 61.1512 * u('m')],
+                            method='nearest')
+
+assert (interp_data == eval_data).all()
+
+
+# ---------------------
 # Example: 2D Histogram
 # ---------------------
 
@@ -102,8 +114,6 @@ assert eval_data.shape == (3, 10)
 
 
 # FITS I/O
-# --------
-
 f = 'test_file.fits'
 
 hist.write(f, format='fits', overwrite=True)
@@ -114,8 +124,6 @@ assert (hist2.axes[1] == hist.axes[1]).all()
 assert (hist2.data == hist.data).all()
 
 # Interpolation
-# -------------
-
 hist.add_linear_interpolator()
 
 interp_data = hist.evaluate(x=[12, 34] * u('m'), weight=[3.2, 2, 2.4] * u('kg'))
@@ -134,6 +142,14 @@ assert interp_data.shape == (5, 1)
 interp_data = hist.evaluate()
 assert (interp_data == hist.data).all()
 
+# check if hand-made nearest neighbour interpolation works
+interp_data = hist.evaluate(x=[12, 34] * u('m'), weight=[3.2, 2, 2.4] * u('kg'),
+                            method='nearest')
+old_data = hist.evaluate_nearest(x=[12, 34] * u('m'),
+                                 weight=[3.2, 2, 2.4] * u('kg'))
+
+assert (interp_data == old_data).all()
+
 # check that log interpolation works
 hist.get_axis('x').log_interpolation = True
 hist.add_linear_interpolator()
@@ -142,17 +158,8 @@ interp_data = hist.evaluate()
 
 assert (interp_data == hist.data).all()
 
-# check if hand-made nearest neighbour interpolation works
-hist.get_axis('x').log_interpolation = False
-hist.add_linear_interpolator(method='nearest')
-
-interp_data = hist.evaluate(x=[12, 34] * u('m'), weight=[3.2, 2, 2.4] * u('kg'))
-old_data = hist.evaluate_nearest(x=[12, 34] * u('m'), weight=[3.2, 2, 2.4] * u('kg'))
-
-assert (interp_data == old_data).all()
 
 # Plotting
-# --------
 
 #with pytest.raises(ValueError):
 #    hist.plot_image(x=12 * u('m'))
