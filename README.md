@@ -9,12 +9,10 @@ Features
 --------
 
 * DataAxis, BinnedDataAxis
-* Evaluation by finding nearest nodes in any dimension
 * Fits I/O
 * 2D image plot
-
+* Interpolation (also in log), methods: nearest, linear
 
 Missing
 
-* Interpolation (also in log)
 * Profile plots
