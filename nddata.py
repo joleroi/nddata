@@ -1,5 +1,6 @@
 """Scratch for NDDataArray class"""
 
+import itertools
 import numpy as np
 from astropy.units import Quantity, Unit
 from astropy.table import Table, Column
@@ -17,6 +18,8 @@ class NDDataArray(object):
     def __init__(self):
         self._axes = list()
         self._data = None
+        # Todo: Should this be set on construction?
+        self._lininterp = None
 
     def add_axis(self, axis):
         """Add axis
@@ -181,10 +184,11 @@ class NDDataArray(object):
 
         return nodes
 
-    def evaluate(self, **kwargs):
+    def evaluate_nearest(self, **kwargs):
         """Evaluate NDData Array
 
-        No interpolation
+        No interpolation, this is equivalent to ``evaluate(method='nearest')``
+        and will probably go away at some point.
 
         Parameters
         ----------
@@ -197,7 +201,82 @@ class NDDataArray(object):
             data = np.take(data, idx[i], axis=i)
 
         return data
-        
+
+    def evaluate(self, interp='linear', **kwargs):
+        """Evaluate NDData Array using a given interpolator.
+
+        Interpolators have to be added before this function can be used.
+        TODO : Do we want a default interpolator to be added on construction?
+
+        Parameters
+        ----------
+        interp : str {'linear'}
+            Interpolator to be used
+        kwargs : dict
+            Axis names are keys, Quantity array are values
+
+        Returns
+        -------
+        array : `~astropy.units.Quantity`
+            Interpolated values, axis order is the same as for the NDData array
+        """
+        for key in kwargs.keys():
+            if key not in self.axis_names:
+                raise ValueError('No axis for key {}'.format(key))
+
+        # Use nodes on unspecified axes
+        for name, val in zip(self.axis_names, self.axes):
+            kwargs.setdefault(name, val.nodes)
+
+        # Put in correct units
+        for key in kwargs:
+            val = kwargs[key].to(self.get_axis(key).unit).value
+            kwargs[key] = np.atleast_1d(val)
+
+        # Bring in correct order
+        values = [kwargs[_] for _ in self.axis_names]
+
+        # Apply log10 where necessary (this is probably not very efficient)
+        log_values = [np.log10(_) for _ in values]
+        loginterp = [a.log_interpolation for a in self.axes]
+        values = np.where(loginterp, log_values, values)
+
+        if interp == 'linear':
+            return self._eval_linear(values) * self.data.unit
+        else:
+            raise ValueError('Interpolator {} not available'.format(interp))
+
+    def add_linear_interpolator(self, **kwargs):
+        """Add `~scipy.interpolate.RegularGridInterpolator`
+
+        The interpolation behaviour of an individual axis can be adjusted by
+        setting the ``log_interpolation`` attribute to True. After that the
+        interpolator has to be setup anew. TODO: Make this somehow more
+        convenient?
+
+        http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.interpolate.RegularGridInterpolator.html
+        """
+        kwargs.setdefault('bounds_error', False)
+
+        from scipy.interpolate import RegularGridInterpolator
+
+        points = [a._interp_nodes() for a in self.axes]
+        values = self.data.value
+
+        self._lininterp = RegularGridInterpolator(points, values, **kwargs)
+
+    def _eval_linear(self, values):
+        """Evaluate linear interpolator
+
+        Input: list of values to evaluate, in correct units and correct order.
+        """
+        shapes = [np.shape(_)[0] for _ in values]
+        points = list(itertools.product(*values))
+        res = self._lininterp(points)
+        res = np.reshape(res, shapes)
+
+        return res
+
     def plot_image(self, ax=None, plot_kwargs = {}, **kwargs):
         """Plot image
 
@@ -238,11 +317,13 @@ class NDDataArray(object):
 
 
 class DataAxis(Quantity):
+    """Data axis for unbinned values"""
     def __new__(cls, energy, unit=None, dtype=None, copy=True, name=None):
         self = super(DataAxis, cls).__new__(cls, energy, unit,
                                             dtype=dtype, copy=copy)
 
         self.name = name
+        self.log_interpolation = False
         return self
 
     def __array_finalize__(self, obj):
@@ -280,8 +361,16 @@ class DataAxis(Quantity):
         """Evaluation nodes"""
         return self
 
+    def _interp_nodes(self):
+        """Nodes to be used for interpolation"""
+        if not self.log_interpolation:
+            return self.nodes.value
+        else:
+            return np.log10(self.nodes.value)
+
 
 class BinnedDataAxis(DataAxis):
+    """Data axis for binned values"""
     @classmethod
     def linspace(cls, min, max, nbins, unit=None):
         """Create linearly spaced axis"""
