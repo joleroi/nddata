@@ -105,3 +105,15 @@ with pytest.raises(ValueError):
     hist.plot_image(x = 12 * u('m'))
 
 hist.plot_image()
+
+# FITS I/O
+#---------
+
+f = 'test_file.fits'
+
+hist.write(f, format='fits', overwrite=True)
+hist2 = NDDataArray.read(f)
+
+assert (hist2.axes[0] == hist.axes[0]).all()
+assert (hist2.axes[1] == hist.axes[1]).all()
+assert (hist2.data == hist.data).all()

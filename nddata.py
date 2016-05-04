@@ -54,7 +54,7 @@ class NDDataArray(object):
 
         Parameters
         ----------
-        data : np.array
+        data : `~astropy.units.Quantity`, array-like
             Data array
         """
         data = np.array(data)
@@ -71,7 +71,7 @@ class NDDataArray(object):
                                  d=dim, n=a.name, sa=a.nbins,
                                  sd=data.shape[dim]))
 
-        self._data = data
+        self._data = Quantity(data)
 
     @property
     def axis_names(self):
@@ -109,13 +109,51 @@ class NDDataArray(object):
 
     def to_table(self):
         """Convert to astropy.Table"""
-        # This can be used as starting point for FITS serialization
-        # http://docs.astropy.org/en/stable/io/unified.html
-        
-        cols = [Column(data=[a.value], unit=a.unit) for a in self.axes]
-        cols.append(Column(data=[self.data], name='data'))
+
+        pairs = [_table_columns_from_data_axis(a) for a in self.axes]
+        cols = [_ for pair in pairs for _ in pair]
+        cols.append(Column(data=[self.data.value], name='data', unit=self.data.unit))
         t = Table(cols)
         return t
+
+    def write(self, *args, **kwargs):
+        """Write to disk
+
+        Calling astropy I/O interface
+        see http://docs.astropy.org/en/stable/io/unified.html
+        """
+        self.to_table().write(*args, **kwargs)
+
+    @classmethod
+    def from_table(cls, table):
+        """Create from astropy table
+
+        The table must represent the convention at
+        http://gamma-astro-data-formats.readthedocs.io/en/latest/info/fits-arrays.html#bintable-hdu
+
+        Parameters
+        ----------
+        table : `~astropy.table`
+            table
+        """
+        nddata = cls()
+        cols = table.columns
+        data = cols.pop(cols.keys()[-1])
+        col_pairs = zip(cols[::2].values(), cols[1::2].values())
+        axes = [_data_axis_from_table_columns(cl, ch) for cl, ch in col_pairs]
+        nddata._axes = axes
+        nddata.data = data.squeeze()
+        return nddata
+
+    @classmethod
+    def read(cls, *args, **kwargs):
+        """Read from disk
+
+        Calling astropy I/O interface
+        see http://docs.astropy.org/en/stable/io/unified.html
+        """
+        t = Table.read(*args, **kwargs)
+        return cls.from_table(t)
 
     def __str__(self):
         """String representation"""
@@ -267,3 +305,36 @@ class BinnedDataAxis(DataAxis):
     def lin_center(self):
         """Linear bin centers"""
         return DataAxis(self[:-1] + self[1:]) / 2
+
+
+def _data_axis_from_table_columns(col_lo, col_hi):
+    """Helper function to translate two table columns to a data axis"""
+    if (col_lo.data == col_hi.data).all():
+        return DataAxis(col_lo.data[0], unit=col_lo.unit, name=col_lo.name[:-3])
+    else:
+        data = np.append(col_lo.data[0], col_hi.data[0][-1])
+        return BinnedDataAxis(data, unit=col_lo.unit, name=col_lo.name[:-3])
+
+
+def _table_columns_from_data_axis(axis):
+    """Helper function to translate a data axis to two table columns
+
+    The first column contains the lower bounds, the second the upper bounds.
+    This satisfies the format definition here
+    http://gamma-astro-data-formats.readthedocs.io/en/latest/info/fits-arrays.html
+    """
+
+    if isinstance(axis, BinnedDataAxis):
+        data_hi = axis.value[1:]
+        data_lo = axis.value[:-1]
+    elif isinstance(axis, DataAxis):
+        data_hi = axis.value
+        data_lo = axis.value
+    else:
+        raise ValueError('Invalid axis type')
+
+    c_hi = Column(data=[data_hi], unit=axis.unit, name='{}_HI'.format(axis.name))
+    c_lo = Column(data=[data_lo], unit=axis.unit, name='{}_LO'.format(axis.name))
+
+    return c_lo, c_hi
+
